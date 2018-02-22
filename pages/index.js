@@ -1,5 +1,5 @@
 import React, { Component } from 'react'
-import  { Map, fromJS } from 'immutable'
+import  { Set, List, fromJS } from 'immutable'
 import { makePuzzle, pluck, isPeer, range } from '../sudoku'
 import NextHead from 'next/head'
 import css from 'styled-jsx/css'
@@ -104,16 +104,17 @@ function getClickHandler(onClick, onDoubleClick, delay = 250) {
 }
 
 function makeCountObject() {
-    const countObj = {}
-    for (let i = 1; i < 10; ++i) countObj[i] = 1
+    const countObj = []
+    for (let i = 0; i < 10; ++i) countObj.push(1)
     return countObj
 }
 
 export default class Index extends Component {
     state = {}
     static async getInitialProps({ req }) {
+        const solution = makePuzzle()
         const { puzzle } = pluck(makePuzzle(), 40)
-        return { puzzle }
+        return { puzzle, solution }
     }
 
     constructor(props) {
@@ -136,62 +137,76 @@ export default class Index extends Component {
             })
         ))
         const board = fromJS({ puzzle, selected: false, choices : { rows, columns, squares }})
-        this.state = { puzzle, selected: false, choices : { rows, columns, squares }, board}
+        this.state = { board, history: List() }
     }
 
-    onSingleTap = (number) => {
-        this.getSelectedCell()
-        const { puzzle, selected } = this.state
-        const selectedCell = selected && puzzle[selected.x][selected.y]
-        const filled = selectedCell && selectedCell.filled
+    addNumberAsNote = (number) => {
+        let { board } = this.state
+        let selectedCell = this.getSelectedCell()
+        if (!selectedCell) return
+        const filled = selectedCell.get('filled')
         if (filled) return
-        const notes = selectedCell.notes || new Set()
+        const { x, y } = board.get('selected')
+        let notes = selectedCell.get('notes') || Set()
         if (notes.has(number)) {
-            notes.delete(number)
+            notes = notes.delete(number)
         } else {
-            notes.add(number)
+            notes = notes.add(number)
         }
-        selectedCell.notes = notes
-        delete selectedCell.value
-        puzzle[selected.x][selected.y] = selectedCell
-        this.setState({ puzzle })
+        selectedCell = selectedCell.set('notes', notes)
+        selectedCell = selectedCell.delete('value')
+        board = board.setIn(['puzzle', x, y], selectedCell)
+        this.updateBoard(board)
     }
 
-    onDoubleTap = (number) => {
-        const { puzzle, selected, choices } = this.state
-        const { x, y } = selected
-        const selectedCell = selected && puzzle[selected.x][selected.y]
-        const filled = selectedCell && selectedCell.filled
-        if (filled) return
-        const { rows, columns, squares } = choices
-        const row = rows[x]
-        const column = columns[y]
-        const square = squares[(Math.floor(x/3))*3 + Math.floor(y/3)]
-        // TODO record last action to undo
-        // TODO **SCREAMING** immutable
-        if (selectedCell.value === number) {
-            delete selectedCell.value
-            rows[x][number] = rows[x][number] + 1
-            columns[y][number] = columns[y][number] + 1
-            squares[(Math.floor(x/3))*3 + Math.floor(y/3)][number] =
-                squares[(Math.floor(x/3))*3 + Math.floor(y/3)][number] + 1
-        } else {
-            if (selectedCell.value) {
-                const prevValue = selectedCell.value
-                rows[x][prevValue] = rows[x][prevValue] + 1
-                columns[y][prevValue] = columns[y][prevValue] + 1
-                squares[(Math.floor(x/3))*3 + Math.floor(y/3)][prevValue] =
-                    squares[(Math.floor(x/3))*3 + Math.floor(y/3)][prevValue] + 1
-            }
-            selectedCell.value = number
-            rows[x][number] = rows[x][number] - 1
-            columns[y][number] = columns[y][number] - 1
-            squares[(Math.floor(x/3))*3 + Math.floor(y/3)][number] =
-                squares[(Math.floor(x/3))*3 + Math.floor(y/3)][number] - 1
+    getUpdatedBoard = (number, x, y, fill = true) => {
+        let { board } = this.state
+        const rowPath = ['choices','rows', x, number]
+        const columnPath = ['choices','columns', y, number]
+        const squarePath = ['choices','squares', (Math.floor(x/3))*3 + Math.floor(y/3), number]
+        const increment = fill ? -1 : 1
+        return board.setIn(rowPath, board.getIn(rowPath) + increment)
+            .setIn(columnPath, board.getIn(columnPath) + increment)
+            .setIn(squarePath, board.getIn(squarePath) +  increment)
+    }
+
+    updateBoard = (newBoard) => {
+        // TODO record history
+        let { board, history } = this.state
+        history = history.push(board)
+        this.setState({ board: newBoard, history })
+    }
+
+    undo = () => {
+        let { history } = this.state
+        if (history.size) {
+            const board = history.last()
+            history = history.pop()
+            this.setState({ history, board })
         }
-        delete selectedCell.notes
-        puzzle[selected.x][selected.y] = selectedCell
-        this.setState({ puzzle, choices: { rows, columns, squares } })
+    }
+
+    fillNumber = (number) => {
+        let { board } = this.state
+        let selectedCell = this.getSelectedCell()
+        if (!selectedCell) return
+        const filled = selectedCell.get('filled')
+        if (filled) return
+        const { x, y } = board.get('selected')
+        const currentValue = selectedCell.get('value')
+        if (currentValue === number) {
+            selectedCell = selectedCell.delete('value')
+            board = this.getUpdatedBoard(number, x, y, false)
+        } else {
+            if (currentValue) {
+                board = this.getUpdatedBoard(currentValue, x, y, false)
+            }
+            board = this.getUpdatedBoard(number, x, y, true)
+            selectedCell = selectedCell.set('value', number)
+        }
+        selectedCell = selectedCell.delete('notes')
+        board = board.setIn(['puzzle', x, y], selectedCell)
+        this.updateBoard(board)
     }
 
     selectCell = (x, y) => {
@@ -261,19 +276,21 @@ export default class Index extends Component {
             </svg>
         )
     }
+
     renderControl(numbers = Array.from(Array(9).keys())) {
-        const { choices: { rows }} = this.state
-        const { filled } = this.getSelected()
+        const rows = this.state.board.getIn(['choices', 'rows'])
+        const selectedCell = this.getSelectedCell()
+        const filled = selectedCell && selectedCell.get('filled')
         return (
-            <div className={`control${filled ? " disabled" : ""}`}>
+            <div className={`control`}>
                 {numbers.map(i => {
                     const number = i+1
                     const clickHandle = getClickHandler(
-                        () => {this.onSingleTap(number)},
-                        () => {this.onDoubleTap(number)}
+                        () => {this.addNumberAsNote(number)},
+                        () => {this.fillNumber(number)}
                     )
                     const count = rows.reduce((accumulator, row) => {
-                        return accumulator + (row[number] <= 0 ? 1 : 0)
+                        return accumulator + (row.get(number) <= 0 ? 1 : 0)
                     }, 0)
                     return (
                         <div key={number} className="number"
@@ -294,9 +311,6 @@ export default class Index extends Component {
                         box-shadow: 0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23);
                         font-family: 'Special Elite', cursive;
                         transition: filter .5s ease-in-out;
-                    }
-                    .disabled {
-                        filter: opacity(20%)
                     }
                     .number {
                         display: flex;
@@ -330,36 +344,38 @@ export default class Index extends Component {
     }
 
     isConflict(i, j) {
-        const { puzzle, choices: { rows, columns, squares } } = this.state
-        const { value } = puzzle[i][j]
+        const { puzzle, choices } = this.state.board.toJSON()
+        const { rows, columns, squares } = choices.toJSON()
+        const { value } = puzzle.getIn([i, j]).toJSON()
         if (!value) return false
-        const row = rows[i][value] >= 0
-        const column = columns[j][value] >= 0
-        const square = squares[(Math.floor(i/3))*3 + Math.floor(j/3)][value] >= 0
+        const row = rows.getIn([i, value]) >= 0
+        const column = columns.getIn([j, value]) >= 0
+        const square = squares.getIn([(Math.floor(i/3))*3 + Math.floor(j/3), value]) >= 0
         return !(row && column && square)
     }
 
     renderPuzzle() {
-        const { puzzle } = this.state
-        const selected = this.getSelected()
+        const { board } = this.state
+        let selected = this.getSelectedCell()
+        selected = selected && selected.toJSON()
         return (
             <div className="puzzle">
-                {puzzle.map((row, i) => (
+                {board.get("puzzle").map((row, i) => (
                     <div key={i} className="row">
                         {
                             row.map((cell, j) => {
-                                const { value, filled, notes } = cell
+                                const { value, filled, notes } = cell.toJSON()
                                 const { x, y } = { x: i, y: j }
                                 let conflict = this.isConflict(i, j)
-                                const peer = isPeer({ x, y}, this.state.selected)
+                                const peer = isPeer({ x, y}, board.get('selected'))
                                 const sameValue = selected && selected.value && value === selected.value
                                 const isSelected = JSON.stringify(this.state.selected) === JSON.stringify({x, y})
                                 return <Cell filled={filled} notes={notes} sameValue={sameValue} isSelected={isSelected} isPeer={peer} value={value}
                                              onClick={() => { this.selectCell(x, y)}} key={j} x={x} y={y} conflict={conflict}/>
-                            })
+                            }).toArray()
                         }
                     </div>
-                ))}
+                )).toArray()}
                 { /*language=CSS*/ }
                 <style jsx>{`
                     .puzzle {
@@ -386,6 +402,7 @@ export default class Index extends Component {
             </div>
         )
     }
+
     render() {
         return (
             <div className="body">
@@ -399,6 +416,7 @@ export default class Index extends Component {
                     {this.renderControl([0,1,2,3,4,5])}
                     {this.renderControl([6,7,8])}
                 </div>
+                <div onClick={this.undo}>undo</div>
                 { /*language=CSS*/ }
                 <style jsx>{`
                     .body {
