@@ -1,3 +1,4 @@
+/* eslint-disable jsx-a11y/accessible-emoji */
 import React, { Component } from 'react';
 import { Set, List, fromJS } from 'immutable';
 import PropTypes from 'prop-types';
@@ -57,6 +58,32 @@ const CellStyle = css`
     display: flex;
     align-items: center;
     justify-content: center;
+}
+`;
+
+// eslint-disable-next-line no-lone-blocks
+{ /* language=CSS */ }
+const ActionsStyle = css`
+.actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    max-width: 400px;
+    margin-top: .5em;
+    padding: 0 .6em;
+}
+.action {
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+}
+.action :global(svg) {
+    width: 2.5em;
+    margin-bottom: .2em;
+}
+.redo :global(svg) {
+    transform: scaleX(-1);
 }
 `;
 
@@ -286,7 +313,11 @@ const Cell = (props) => {
       {
         notes ?
           range(9).map(i =>
-            (<div key={i} className="note-number">{notes.has(i + 1) && (i + 1)}</div>)) :
+            (
+              <div key={i} className="note-number">
+                {notes.has(i + 1) && (i + 1)}
+              </div>
+            )) :
           value && value
       }
       {/* language=CSS */}
@@ -362,12 +393,12 @@ function getClickHandler(onClick, onDoubleClick, delay = 250) {
 }
 
 /**
- * make size 9 array of 1s
+ * make size 9 array of 0s
  * @returns {Array}
  */
 function makeCountObject() {
   const countObj = [];
-  for (let i = 0; i < 10; i += 1) countObj.push(1);
+  for (let i = 0; i < 10; i += 1) countObj.push(0);
   return countObj;
 }
 
@@ -377,16 +408,16 @@ function makeCountObject() {
  * @returns {any}
  */
 function makeBoard({ puzzle }) {
-  // for each group create initial count object to keep track of conflicts per number value
+  // create initial count object to keep track of conflicts per number value
   const rows = Array.from(Array(9).keys()).map(() => makeCountObject());
   const columns = Array.from(Array(9).keys()).map(() => makeCountObject());
   const squares = Array.from(Array(9).keys()).map(() => makeCountObject());
   const result = puzzle.map((row, i) => (
     row.map((cell, j) => {
       if (cell) {
-        rows[i][cell] -= 1;
-        columns[j][cell] -= 1;
-        squares[((Math.floor(i / 3)) * 3) + Math.floor(j / 3)][cell] -= 1;
+        rows[i][cell] += 1;
+        columns[j][cell] += 1;
+        squares[((Math.floor(i / 3)) * 3) + Math.floor(j / 3)][cell] += 1;
       }
       return {
         value: puzzle[i][j] > 0 ? puzzle[i][j] : null,
@@ -413,17 +444,22 @@ function updateBoardWithNumber({
   cell = cell.delete('notes');
   // set or unset its value depending on `fill`
   cell = fill ? cell.set('value', number) : cell.delete('value');
-  const increment = fill ? -1 : 1;
+  const increment = fill ? 1 : -1;
   // update the current group choices
   const rowPath = ['choices', 'rows', x, number];
   const columnPath = ['choices', 'columns', y, number];
-  const squarePath = ['choices', 'squares', ((Math.floor(x / 3)) * 3) + Math.floor(y / 3), number];
+  const squarePath = ['choices', 'squares',
+    ((Math.floor(x / 3)) * 3) + Math.floor(y / 3), number];
   return board.setIn(rowPath, board.getIn(rowPath) + increment)
     .setIn(columnPath, board.getIn(columnPath) + increment)
     .setIn(squarePath, board.getIn(squarePath) + increment)
     .setIn(['puzzle', x, y], cell);
 }
 
+function getNumberOfGroupsAssignedForNumber(number, groups) {
+  return groups.reduce((accumulator, row) =>
+    accumulator + (row.get(number) > 0 ? 1 : 0), 0);
+}
 // eslint-disable-next-line react/no-multi-comp
 export default class Index extends Component {
   state = {};
@@ -434,11 +470,18 @@ export default class Index extends Component {
     return selected && board.get('puzzle').getIn([selected.x, selected.y]);
   }
 
-  // get the unique count of number value used for each row group
+  // get the min between its completion in rows, columns and squares.
   getNumberValueCount(number) {
     const rows = this.state.board.getIn(['choices', 'rows']);
-    return rows.reduce((accumulator, row) =>
-      accumulator + (row.get(number) <= 0 ? 1 : 0), 0);
+    const columns = this.state.board.getIn(['choices', 'columns']);
+    const squares = this.state.board.getIn(['choices', 'squares']);
+    return Math.min(
+      getNumberOfGroupsAssignedForNumber(number, squares),
+      Math.min(
+        getNumberOfGroupsAssignedForNumber(number, rows),
+        getNumberOfGroupsAssignedForNumber(number, columns),
+      ),
+    );
   }
 
   generateGame = (finalCount = 20) => {
@@ -554,14 +597,16 @@ export default class Index extends Component {
   };
 
   isConflict(i, j) {
-    const { puzzle, choices } = this.state.board.toJSON();
-    const { rows, columns, squares } = choices.toJSON();
-    const { value } = puzzle.getIn([i, j]).toJSON();
+    const { value } = this.state.board.getIn(['puzzle', i, j]).toJSON();
     if (!value) return false;
-    const row = rows.getIn([i, value]) >= 0;
-    const column = columns.getIn([j, value]) >= 0;
-    const square = squares.getIn([((Math.floor(i / 3)) * 3) + Math.floor(j / 3), value]) >= 0;
-    return !(row && column && square);
+    const rowConflict =
+      this.state.board.getIn(['choices', 'rows', i, value]) > 1;
+    const columnConflict =
+      this.state.board.getIn(['choices', 'columns', j, value]) > 1;
+    const squareConflict =
+      this.state.board.getIn(['choices', 'squares',
+        ((Math.floor(i / 3)) * 3) + Math.floor(j / 3), value]) > 1;
+    return rowConflict || columnConflict || squareConflict;
   }
 
   renderCell(cell, x, y) {
@@ -570,7 +615,8 @@ export default class Index extends Component {
     const { value, prefilled, notes } = cell.toJSON();
     const conflict = this.isConflict(x, y);
     const peer = areCoordinatePeers({ x, y }, board.get('selected'));
-    const sameValue = !!(selected && selected.get('value') && value === selected.get('value'));
+    const sameValue = !!(selected && selected.get('value')
+      && value === selected.get('value'));
 
     const isSelected = cell === selected;
     return (<Cell
@@ -619,35 +665,23 @@ export default class Index extends Component {
     const prefilled = selectedCell && selectedCell.get('prefilled');
     return (
       <div className="actions">
-        <div className="action" onClick={history.size ? this.undo : null}><ReloadIcon />Undo</div>
-        <div className="action redo" onClick={history.size ? this.redo : null}><ReloadIcon />Redo</div>
-        <div className="action" onClick={!prefilled ? this.eraseSelected : null}><RemoveIcon />Erase</div>
-        <div className="action" onClick={!prefilled ? this.fillSelectedWithSolution : null}><LoupeIcon />Hint</div>
-        { /* language=CSS */ }
-        <style jsx>{`
-            .actions {
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                width: 100%;
-                max-width: 400px;
-                margin-top: .5em;
-                padding: 0 .6em;
-            }
-            .action {
-                display: flex;
-                align-items: center;
-                flex-direction: column;
-            }
-            .action :global(svg) {
-                width: 2.5em;
-                margin-bottom: .2em;
-            }
-            .redo :global(svg) {
-                transform: scaleX(-1);
-            }
-        `}
-        </style>
+        <div className="action" onClick={history.size ? this.undo : null}>
+          <ReloadIcon />Undo
+        </div>
+        <div className="action redo" onClick={history.size ? this.redo : null}>
+          <ReloadIcon />Redo
+        </div>
+        <div className="action" onClick={!prefilled ? this.eraseSelected : null}>
+          <RemoveIcon />Erase
+        </div>
+        <div
+          className="action"
+          onClick={!prefilled ?
+          this.fillSelectedWithSolution : null}
+        >
+          <LoupeIcon />Hint
+        </div>
+        <style jsx>{ActionsStyle}</style>
       </div>
     );
   }
@@ -737,7 +771,7 @@ export default class Index extends Component {
     return (
       <div className="body">
         <NextHead>
-          <title>Sudoku</title>
+          <title>Play Sudoku</title>
           <meta name="viewport" content="initial-scale=1.0, width=device-width" />
           <link href="https://fonts.googleapis.com/css?family=Special+Elite" rel="stylesheet" />
         </NextHead>
@@ -745,8 +779,12 @@ export default class Index extends Component {
         {board && this.renderHeader()}
         {board && this.renderPuzzle()}
         {board && this.renderControls()}
+        <div className="rooter">Made with <span>❤️</span>️ By <a href="https://www.sitianliu.com/">Sitian Liu</a></div>
         { /* language=CSS */ }
         <style jsx>{`
+            :global(body), .body {
+                font-family: 'Special Elite', cursive;
+            }
             .body {
                 display: flex;
                 flex-direction: column;
@@ -754,25 +792,45 @@ export default class Index extends Component {
                 justify-content: center;
                 height: 100vh;
                 width: 100vw;
-                font-family: 'Special Elite', cursive;
+                position: relative;
             }
-            @media (min-width: 800px) {
-                .body {
+            @media (min-width: 800px) and (min-height: 930px){
+                :global(.header, .puzzle, .controls) {
                     font-size: 1.5em;
                 }
             }
-            @media (max-width: 800px) and (min-width: 600px) {
-                .body {
+            @media (max-width: 800px) and (min-width: 600px){
+                :global(.header, .puzzle, .controls) {
                     font-size: 1.2em;
                 }
             }
-            @media (max-width: 370px) {
-                .body {
+            @media (max-height: 930px) and (min-height: 800px) and (min-width: 600px){
+                :global(.header, .puzzle, .controls) {
+                    font-size: 1.2em;
+                }
+            }
+            @media (max-height: 800px) and (min-height: 600px) and (min-width: 370px){
+                :global(.header, .puzzle, .controls) {
+                    font-size: 1em;
+                }
+            }
+            @media (max-width: 370px){
+                :global(.header, .puzzle, .controls) {
+                    font-size: .8em;
+                }
+            }
+            @media (max-height: 600px){
+                :global(.header, .puzzle, .controls) {
                     font-size: .8em;
                 }
             }
             :global(body) {
                 margin: 0;
+            }
+            .rooter {
+                position: fixed;
+                bottom: 0;
+                font-size: .8em;
             }
         `}
         </style>

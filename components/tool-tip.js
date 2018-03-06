@@ -4,13 +4,16 @@ import HelpIcon from '../svg/help.svg';
 
 const TipCopy = (
   <div className="tip-copy">
-    <div><b>Select:</b> Tab cell</div>
-    <div><b>Assign Number:</b> Single click on desired number control</div>
+    <div className="tip-line"><b>Select:</b> Click a cell</div>
+    <div className="tip-line"><b>Assign Number:</b> Single click on desired number control</div>
     <div><b>Tag Number as Note:</b> Double click on the desired number control</div>
     { /* language=CSS */ }
     <style jsx>{`
         .tip-copy {
             font-size: 1.2em;
+        }
+        .tip-line {
+            margin-bottom: .4em;
         }
     `}
     </style>
