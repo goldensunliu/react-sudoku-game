@@ -464,6 +464,21 @@ function getNumberOfGroupsAssignedForNumber(number, groups) {
 export default class Index extends Component {
   state = {};
 
+  componentDidMount() {
+    // eslint-disable-next-line no-undef
+    if ('serviceWorker' in navigator) {
+      // eslint-disable-next-line no-undef
+      navigator.serviceWorker
+        .register('/service-worker.js')
+        .then((reg) => {
+          console.log('ServiceWorker scope: ', reg.scope);
+          console.log('service worker registration successful');
+        })
+        .catch((err) => {
+          console.warn('service worker registration failed', err.message);
+        });
+    }
+  }
   getSelectedCell() {
     const { board } = this.state;
     const selected = board.get('selected');

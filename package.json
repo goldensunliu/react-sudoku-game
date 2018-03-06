@@ -1,7 +1,7 @@
 {
-  "name": "react-sudoku",
+  "name": "react-sudoku-game",
   "version": "1.0.0",
-  "description": "",
+  "description": "A sudoku web game packed with user-friendly features. It is built with React + Next.js",
   "main": "index.js",
   "scripts": {
     "dev": "next",

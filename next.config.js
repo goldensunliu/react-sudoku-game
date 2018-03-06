@@ -19,7 +19,7 @@ module.exports = {
         },
       });
     }
-/*    config.plugins.push(new SWPrecacheWebpackPlugin({
+    config.plugins.push(new SWPrecacheWebpackPlugin({
       verbose: true,
       staticFileGlobsIgnorePatterns: [/\.next\//],
       runtimeCaching: [
@@ -28,7 +28,7 @@ module.exports = {
           urlPattern: /^https?.*!/,
         },
       ],
-    }));*/
+    }));
     // Important: return the modified config
     return config;
   },
