@@ -3,4 +3,5 @@
 *.iws
 node_modules
 build/
+out/
 package-lock.json
