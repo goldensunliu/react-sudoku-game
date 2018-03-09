@@ -287,6 +287,8 @@ self.addEventListener('fetch', function(event) {
 
 toolbox.router.get(/^https?.*!/, toolbox.networkFirst, {});
 
+toolbox.router.default = toolbox.cacheFirst;
+
 
 
 

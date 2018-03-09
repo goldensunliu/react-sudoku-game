@@ -91,6 +91,7 @@ const ActionsStyle = css`
 { /* language=CSS */ }
 const ControlStyle = css`
 .control {
+    padding: 0 2em;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
@@ -518,6 +519,12 @@ export default class Index extends Component {
     const prefilled = selectedCell.get('prefilled');
     if (prefilled) return;
     const { x, y } = board.get('selected');
+    const currentValue = selectedCell.get('value');
+    if (currentValue) {
+      board = updateBoardWithNumber({
+        x, y, number: currentValue, fill: false, board: this.state.board,
+      });
+    }
     let notes = selectedCell.get('notes') || Set();
     if (notes.has(number)) {
       notes = notes.delete(number);
@@ -794,7 +801,9 @@ export default class Index extends Component {
         {board && this.renderHeader()}
         {board && this.renderPuzzle()}
         {board && this.renderControls()}
-        <div className="rooter">Made with <span>❤️</span>️ By <a href="https://www.sitianliu.com/">Sitian Liu</a></div>
+        <div className="rooter">
+          Made with <span>❤️</span>️ By <a href="https://www.sitianliu.com/">Sitian Liu</a> | <a href="https://medium.com/@sitianliu_57680/building-a-sudoku-game-in-react-ca663915712">Blog Post</a>
+        </div>
         { /* language=CSS */ }
         <style jsx>{`
             :global(body), .body {
@@ -846,6 +855,8 @@ export default class Index extends Component {
                 position: fixed;
                 bottom: 0;
                 font-size: .8em;
+                width: 100%;
+                text-align: center;
             }
         `}
         </style>
