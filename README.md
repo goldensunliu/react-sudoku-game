@@ -1,5 +1,7 @@
 ## React Sudoku Game
 
+[![Greenkeeper badge](https://badges.greenkeeper.io/goldensunliu/react-sudoku-game.svg)](https://greenkeeper.io/)
+
 A sudoku web game packed with user-friendly features. It is built with React + Next.js
 
 #### [Deployed Game](https://sudoku.sitianliu.com/)
